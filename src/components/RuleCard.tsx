@@ -1,10 +1,13 @@
 import type { Rule } from '../types';
 import { METHOD_MATCHERS, REDIRECT_STATUSES } from '../types';
+import type { ShadowReport } from '../shadow';
 
 interface Props {
   rule: Rule;
   index: number;
   total: number;
+  /** 遮蔽诊断结果：存在即表示该规则不可达 */
+  shadow?: ShadowReport;
   onChange: (next: Rule) => void;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
@@ -16,14 +19,22 @@ const ACTION_LABEL: Record<Rule['action']['type'], string> = {
   stop: '停止',
 };
 
-export function RuleCard({ rule, index, total, onChange, onMove, onRemove }: Props) {
+/** 路径模式展示：空值与 * 都表示「任意路径」 */
+function fmtPath(template: string): string {
+  const t = template.trim();
+  return t === '' ? '（空，任意路径）' : t;
+}
+
+export function RuleCard({ rule, index, total, shadow, onChange, onMove, onRemove }: Props) {
   const set = <K extends keyof Rule>(key: K, value: Rule[K]) =>
     onChange({ ...rule, [key]: value });
   const setAction = (patch: Partial<Rule['action']>) =>
     onChange({ ...rule, action: { ...rule.action, ...patch } });
 
   return (
-    <div className={`rule-card${rule.enabled ? '' : ' rule-off'}`}>
+    <div
+      className={`rule-card${rule.enabled ? '' : ' rule-off'}${shadow ? ' rule-shadowed' : ''}`}
+    >
       <div className="rule-head">
         <span className="rule-order">#{index + 1}</span>
         <input
@@ -32,6 +43,7 @@ export function RuleCard({ rule, index, total, onChange, onMove, onRemove }: Pro
           placeholder="规则名称"
           onChange={(e) => set('name', e.target.value)}
         />
+        {shadow && <span className="tag tag-shadow">不可达</span>}
         <label className="rule-enable">
           <input
             type="checkbox"
@@ -128,6 +140,29 @@ export function RuleCard({ rule, index, total, onChange, onMove, onRemove }: Pro
           </label>
         )}
       </div>
+
+      {shadow && (
+        <div className="shadow-detail">
+          <div>
+            ⚠️ 不可达：全部可匹配请求已被第 {shadow.byRuleIndex + 1} 条规则「
+            {shadow.byRuleName}」完全覆盖，本条永远不会命中。
+          </div>
+          <ul className="shadow-basis">
+            <li>
+              方法 <code>{shadow.basis.method.upper}</code> ⊇{' '}
+              <code>{shadow.basis.method.lower}</code>
+            </li>
+            <li>
+              主机 <code>{shadow.basis.host.upper}</code> ⊇{' '}
+              <code>{shadow.basis.host.lower}</code>
+            </li>
+            <li>
+              路径 <code>{fmtPath(shadow.basis.path.upper)}</code> ⊇{' '}
+              <code>{fmtPath(shadow.basis.path.lower)}</code>
+            </li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

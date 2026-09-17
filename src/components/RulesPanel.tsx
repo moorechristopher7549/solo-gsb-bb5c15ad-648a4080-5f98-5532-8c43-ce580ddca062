@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Rule } from '../types';
 import { uid, validateRules } from '../validate';
+import { analyzeShadowing, type ShadowReport } from '../shadow';
 import { SAMPLE_RULES } from '../samples';
 import { RuleCard } from './RuleCard';
 
@@ -13,6 +14,14 @@ interface Props {
 export function RulesPanel({ rules, onRulesChange, onShare }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
+
+  // 遮蔽诊断：规则表每次变化（增删、排序、字段、启停）即时重新分析，
+  // 仅作提示，不影响模拟执行
+  const shadowMap = useMemo(() => {
+    const map = new Map<string, ShadowReport>();
+    for (const report of analyzeShadowing(rules)) map.set(report.ruleId, report);
+    return map;
+  }, [rules]);
 
   const update = (i: number, next: Rule) =>
     onRulesChange(rules.map((r, j) => (j === i ? next : r)));
@@ -100,6 +109,13 @@ export function RulesPanel({ rules, onRulesChange, onShare }: Props) {
 
       {importError && <div className="banner error">导入失败：{importError}</div>}
 
+      {shadowMap.size > 0 && (
+        <div className="banner warn">
+          ⚠️ 遮蔽诊断：{shadowMap.size} 条已启用规则不可达（全部被更早的启用规则覆盖），
+          详见对应规则卡片。诊断仅作提示，不影响模拟执行。
+        </div>
+      )}
+
       {rules.length === 0 ? (
         <p className="empty">暂无规则。点击「添加规则」或「载入示例」开始。</p>
       ) : (
@@ -109,6 +125,7 @@ export function RulesPanel({ rules, onRulesChange, onShare }: Props) {
             rule={rule}
             index={i}
             total={rules.length}
+            shadow={shadowMap.get(rule.id)}
             onChange={(next) => update(i, next)}
             onMove={(dir) => move(i, dir)}
             onRemove={() => remove(i)}
