@@ -1,10 +1,13 @@
 import type { Rule } from '../types';
 import { METHOD_MATCHERS, REDIRECT_STATUSES } from '../types';
+import type { ShadowInfo } from '../shadow';
 
 interface Props {
   rule: Rule;
   index: number;
   total: number;
+  /** 遮蔽诊断结果：存在表示该规则不可达（仅已启用规则可能出现） */
+  shadow?: ShadowInfo;
   onChange: (next: Rule) => void;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
@@ -16,14 +19,20 @@ const ACTION_LABEL: Record<Rule['action']['type'], string> = {
   stop: '停止',
 };
 
-export function RuleCard({ rule, index, total, onChange, onMove, onRemove }: Props) {
+const BASIS_DIM_LABEL = ['方法', '主机', '路径'] as const;
+
+export function RuleCard({ rule, index, total, shadow, onChange, onMove, onRemove }: Props) {
   const set = <K extends keyof Rule>(key: K, value: Rule[K]) =>
     onChange({ ...rule, [key]: value });
   const setAction = (patch: Partial<Rule['action']>) =>
     onChange({ ...rule, action: { ...rule.action, ...patch } });
 
   return (
-    <div className={`rule-card${rule.enabled ? '' : ' rule-off'}`}>
+    <div
+      className={`rule-card${rule.enabled ? '' : ' rule-off'}${
+        shadow ? ' rule-shadowed' : ''
+      }`}
+    >
       <div className="rule-head">
         <span className="rule-order">#{index + 1}</span>
         <input
@@ -32,6 +41,11 @@ export function RuleCard({ rule, index, total, onChange, onMove, onRemove }: Pro
           placeholder="规则名称"
           onChange={(e) => set('name', e.target.value)}
         />
+        {shadow && (
+          <span className="tag tag-unreachable" title="该规则的全部可匹配请求都已被前面的已启用规则覆盖">
+            不可达
+          </span>
+        )}
         <label className="rule-enable">
           <input
             type="checkbox"
@@ -128,6 +142,24 @@ export function RuleCard({ rule, index, total, onChange, onMove, onRemove }: Pro
           </label>
         )}
       </div>
+
+      {shadow && (
+        <div className="shadow-note" role="status">
+          <div className="shadow-note-head">
+            不可达：全部可匹配请求已被第 {shadow.shadowedByIndex + 1} 条规则「
+            {shadow.shadowedByName}」先行命中
+          </div>
+          <ul className="shadow-basis">
+            {[shadow.method, shadow.host, shadow.path].map((basis, i) => (
+              <li key={BASIS_DIM_LABEL[i]}>
+                <span className="shadow-dim">{BASIS_DIM_LABEL[i]}</span>
+                <code>{basis.value}</code>
+                <span className="shadow-reason">{basis.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Rule } from '../types';
 import { uid, validateRules } from '../validate';
 import { SAMPLE_RULES } from '../samples';
+import { diagnoseShadows } from '../shadow';
 import { RuleCard } from './RuleCard';
 
 interface Props {
@@ -13,6 +14,15 @@ interface Props {
 export function RulesPanel({ rules, onRulesChange, onShare }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
+
+  // 遮蔽诊断为纯派生数据：规则顺序 / 字段 / 启用状态任意变更后随渲染即时刷新，
+  // 不写回规则、不影响模拟执行
+  const shadows = useMemo(() => diagnoseShadows(rules), [rules]);
+  const shadowCount = shadows.size;
+  const activeCount = useMemo(
+    () => rules.reduce((n, r) => n + (r.enabled ? 1 : 0), 0),
+    [rules],
+  );
 
   const update = (i: number, next: Rule) =>
     onRulesChange(rules.map((r, j) => (j === i ? next : r)));
@@ -100,6 +110,18 @@ export function RulesPanel({ rules, onRulesChange, onShare }: Props) {
 
       {importError && <div className="banner error">导入失败：{importError}</div>}
 
+      {rules.length > 0 &&
+        (shadowCount > 0 ? (
+          <div className="banner warn shadow-summary" role="status">
+            遮蔽诊断：{activeCount} 条已启用规则中有 <strong>{shadowCount}</strong>{' '}
+            条不可达——其全部可匹配请求已被它之前的已启用规则覆盖；标记规则上列出了首个遮蔽规则与方法、主机、路径三项依据。调整顺序或字段后实时更新。
+          </div>
+        ) : (
+          <div className="banner ok shadow-summary" role="status">
+            遮蔽诊断：{activeCount} 条已启用规则均可达，未发现完整遮蔽。
+          </div>
+        ))}
+
       {rules.length === 0 ? (
         <p className="empty">暂无规则。点击「添加规则」或「载入示例」开始。</p>
       ) : (
@@ -109,6 +131,7 @@ export function RulesPanel({ rules, onRulesChange, onShare }: Props) {
             rule={rule}
             index={i}
             total={rules.length}
+            shadow={shadows.get(i)}
             onChange={(next) => update(i, next)}
             onMove={(dir) => move(i, dir)}
             onRemove={() => remove(i)}
