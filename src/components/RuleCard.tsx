@@ -1,0 +1,133 @@
+import type { Rule } from '../types';
+import { METHOD_MATCHERS, REDIRECT_STATUSES } from '../types';
+
+interface Props {
+  rule: Rule;
+  index: number;
+  total: number;
+  onChange: (next: Rule) => void;
+  onMove: (dir: -1 | 1) => void;
+  onRemove: () => void;
+}
+
+const ACTION_LABEL: Record<Rule['action']['type'], string> = {
+  rewrite: '重写',
+  redirect: '重定向',
+  stop: '停止',
+};
+
+export function RuleCard({ rule, index, total, onChange, onMove, onRemove }: Props) {
+  const set = <K extends keyof Rule>(key: K, value: Rule[K]) =>
+    onChange({ ...rule, [key]: value });
+  const setAction = (patch: Partial<Rule['action']>) =>
+    onChange({ ...rule, action: { ...rule.action, ...patch } });
+
+  return (
+    <div className={`rule-card${rule.enabled ? '' : ' rule-off'}`}>
+      <div className="rule-head">
+        <span className="rule-order">#{index + 1}</span>
+        <input
+          className="rule-name"
+          value={rule.name}
+          placeholder="规则名称"
+          onChange={(e) => set('name', e.target.value)}
+        />
+        <label className="rule-enable">
+          <input
+            type="checkbox"
+            checked={rule.enabled}
+            onChange={(e) => set('enabled', e.target.checked)}
+          />
+          启用
+        </label>
+        <span className="rule-buttons">
+          <button title="上移" disabled={index === 0} onClick={() => onMove(-1)}>
+            ↑
+          </button>
+          <button
+            title="下移"
+            disabled={index === total - 1}
+            onClick={() => onMove(1)}
+          >
+            ↓
+          </button>
+          <button className="danger" title="删除规则" onClick={onRemove}>
+            删除
+          </button>
+        </span>
+      </div>
+
+      <div className="rule-grid">
+        <label>
+          方法
+          <select
+            value={rule.method}
+            onChange={(e) => set('method', e.target.value as Rule['method'])}
+          >
+            {METHOD_MATCHERS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          主机
+          <input
+            value={rule.host}
+            placeholder="example.com 或 *.example.com"
+            onChange={(e) => set('host', e.target.value)}
+          />
+        </label>
+        <label>
+          路径模板
+          <input
+            value={rule.pathTemplate}
+            placeholder="/users/:id（留空或 * 匹配任意）"
+            onChange={(e) => set('pathTemplate', e.target.value)}
+          />
+        </label>
+        <label>
+          动作
+          <select
+            value={rule.action.type}
+            onChange={(e) =>
+              setAction({ type: e.target.value as Rule['action']['type'] })
+            }
+          >
+            {(Object.keys(ACTION_LABEL) as Rule['action']['type'][]).map((t) => (
+              <option key={t} value={t}>
+                {ACTION_LABEL[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {rule.action.type !== 'stop' && (
+          <label className="span-2">
+            目标（可引用 :参数）
+            <input
+              value={rule.action.target}
+              placeholder="/new/path/:id 或 https://other.com/:id"
+              onChange={(e) => setAction({ target: e.target.value })}
+            />
+          </label>
+        )}
+        {rule.action.type === 'redirect' && (
+          <label>
+            状态码
+            <select
+              value={rule.action.status}
+              onChange={(e) => setAction({ status: Number(e.target.value) })}
+            >
+              {REDIRECT_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+    </div>
+  );
+}
